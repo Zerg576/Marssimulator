@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Симулятор межпланетных запусков · Земля → Марс</title>
+<style>
+  :root{
+    --bg:#0b1117; --panel:#121b24; --panel2:#16212c; --line:#22303d;
+    --text:#d8e2ec; --dim:#8b98a8; --accent:#4fc3f7;
+    --ok:#3cdc82; --bad:#e05555; --warn:#f0b429;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  .wrap{max-width:1500px;margin:0 auto;padding:16px}
+  h1{font-size:17px;margin:0 0 4px;letter-spacing:.04em}
+  .sub{color:var(--dim);font-size:12px;margin:0 0 14px}
+  .badge{padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600}
+  .badge.loading{background:rgba(240,180,41,.15);color:var(--warn)}
+  .badge.ok{background:rgba(60,220,130,.15);color:var(--ok)}
+  .badge.fallback{background:rgba(240,180,41,.15);color:var(--warn)}
+  .badge.error{background:rgba(224,85,85,.15);color:var(--bad)}
+
+  .grid{display:grid;grid-template-columns:290px 1fr 320px;gap:14px;align-items:start}
+  @media(max-width:1200px){.grid{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .card h2{font-size:12px;margin:0 0 10px;color:var(--dim);letter-spacing:.1em;
+    text-transform:uppercase;font-weight:600}
+
+  label{display:block;margin:9px 0 3px;color:var(--dim);font-size:11px}
+  label b{color:var(--text)}
+  input[type=number],select{width:100%;background:var(--panel2);border:1px solid var(--line);
+    color:var(--text);padding:6px 8px;border-radius:6px;font-family:inherit;font-size:12px}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  button{background:var(--accent);color:#04121b;border:0;padding:8px 12px;border-radius:6px;
+    font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;letter-spacing:.03em;
+    transition:filter .15s}
+  button:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  button.ghost:hover{background:#1c2835}
+  .btnrow{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .btnrow button{flex:1;min-width:110px}
+
+  #sky{width:100%;height:520px;display:block;border-radius:10px;background:#060a0f;
+    border:1px solid var(--line);cursor:crosshair}
+  @media(max-width:1200px){#sky{height:400px}}
+
+  #calWrap{position:relative}
+  #cal{width:100%;height:auto;display:block;cursor:pointer;border-radius:6px}
+  #tip{position:absolute;pointer-events:none;background:#0d1620;border:1px solid var(--accent);
+    border-radius:6px;padding:6px 8px;font-size:11px;white-space:nowrap;display:none;z-index:20;
+    box-shadow:0 4px 16px rgba(0,0,0,.6);line-height:1.5}
+
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;
+    border-bottom:1px dashed #1e2a36}
+  .kv:last-child{border-bottom:0}
+  .kv span:first-child{color:var(--dim)}
+  .kv span:last-child{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+
+  .section-title{color:var(--accent);font-size:11px;font-weight:700;
+    letter-spacing:.1em;margin:14px 0 4px;padding-bottom:4px;
+    border-bottom:1px solid #22303d}
+  .section-title:first-child{margin-top:0}
+
+  .verdict{margin-top:14px;padding:12px;border-radius:8px;text-align:center;
+    font-weight:700;letter-spacing:.05em;font-size:13px;line-height:1.5}
+  .verdict.ok{background:rgba(60,220,130,.13);color:var(--ok);border:1px solid rgba(60,220,130,.4)}
+  .verdict.bad{background:rgba(224,85,85,.13);color:var(--bad);border:1px solid rgba(224,85,85,.4)}
+  .verdict.idle{background:rgba(139,152,168,.10);color:var(--dim);border:1px solid #22303d}
+
+  .why{margin-top:10px;font-size:11px;color:var(--dim);line-height:1.6}
+  .why b{color:var(--text)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+  .dot.ok{background:rgba(60,220,130,.9)}
+  .dot.bad{background:rgba(220,70,70,.6)}
+  .dot.none{background:#1b2530}
+
+  .bar{height:5px;background:#1b2530;border-radius:3px;overflow:hidden;margin-top:8px}
+  .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .12s}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--dim);font-size:11px;margin-top:8px}
+  .controls-inline{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .controls-inline button{padding:6px 12px}
+  .hint{color:var(--dim);font-size:11px}
+  .col-status{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>СИМУЛЯТОР МЕЖПЛАНЕТНЫХ ЗАПУСКОВ · ЗЕМЛЯ → МАРС</h1>
+    <p class="sub">
+      Эфемериды: <span id="ephStatus" class="badge loading">JPL Horizons …</span>
+      · Модель: гелиоцентрическая, импульсные перелёты (задача Ламберта)
+    </p>
+  </header>
+
+  <div class="grid">
+    <!-- ЛЕВАЯ ПАНЕЛЬ -->
+    <aside class="card">
+      <h2>Параметры миссии</h2>
+
+      <label>Годы моделирования</label>
+      <div class="row">
+        <input type="number" id="y0" value="2026" min="1990" max="2060">
+        <input type="number" id="y1" value="2035" min="1990" max="2060">
+      </div>
+
+      <label>Бюджет Δv, км/с <b id="dvBVal">6.0</b></label>
+      <input type="range" id="dvB" min="4.5" max="12" step="0.1" value="6.0">
+
+      <label>Высота парковочной орбиты Земли, км <b id="hEVal">200</b></label>
+      <input type="range" id="hE" min="150" max="1200" step="10" value="200">
+
+      <label>Высота парковочной орбиты Марса, км <b id="hMVal">400</b></label>
+      <input type="range" id="hM" min="150" max="2000" step="10" value="400">
+
+      <label>Максимальное время полёта, сут <b id="tofMaxVal">350</b></label>
+      <input type="range" id="tofMax" min="180" max="500" step="5" value="350">
+
+      <label>Режим подбора TOF</label>
+      <select id="tofMode">
+        <option value="auto" selected>Авто (минимум Δv)</option>
+        <option value="fixed">Фиксированное</option>
+      </select>
+
+      <label id="tofFixLabel" style="display:none">Фиксированное TOF, сут <b id="tofFixVal">250</b></label>
+      <input type="range" id="tofFix" min="120" max="450" step="5" value="250" style="display:none">
+
+      <div class="btnrow">
+        <button id="run">ПЕРЕСЧИТАТЬ</button>
+        <button id="best" class="ghost">ЛУЧШЕЕ ОКНО</button>
+      </div>
+      <div class="btnrow">
+        <button id="reset" class="ghost" style="width:100%">СБРОСИТЬ ВСЁ</button>
+      </div>
+
+      <div class="bar"><i id="prog"></i></div>
+      <div class="col-status">
+        <span id="progTxt" class="hint">&nbsp;</span>
+      </div>
+    </aside>
+
+    <!-- ЦЕНТР -->
+    <main>
+      <div class="card" style="padding:8px">
+        <canvas id="sky"></canvas>
+        <div class="controls-inline">
+          <button id="play" class="ghost">▶ ПУСК</button>
+          <button id="skip" class="ghost">⏭ В КОНЕЦ</button>
+          <span class="hint" id="animHint">Анимация перелёта для выбранной даты</span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>Календарь окон запуска</h2>
+        <div id="calWrap">
+          <canvas id="cal"></canvas>
+          <div id="tip"></div>
+        </div>
+        <div class="legend">
+          <span><i class="dot ok"></i>окно открыто</span>
+          <span><i class="dot bad"></i>запуск невыгоден</span>
+          <span><i class="dot none"></i>вне диапазона</span>
+          <span>яркость = запас по Δv</span>
+          <span>клик — выбрать дату</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ПРАВАЯ ПАНЕЛЬ -->
+    <aside class="card">
+      <h2>Численный итог</h2>
+
+      <div class="section-title">СТАРТ</div>
+      <div class="kv"><span>Дата старта</span><span id="rDep">—</span></div>
+      <div class="kv"><span>Дата прибытия</span><span id="rArr">—</span></div>
+      <div class="kv"><span>Время полёта</span><span id="rTof">—</span></div>
+      <div class="kv"><span>Фазовый угол на старте</span><span id="rPhase">—</span></div>
+
+      <div class="section-title">ГЕОМЕТРИЯ ПЕРЕЛЁТА</div>
+      <div class="kv"><span>v∞ отхода</span><span id="rVinfD">—</span></div>
+      <div class="kv"><span>v∞ прилёта</span><span id="rVinfA">—</span></div>
+      <div class="kv"><span>C3</span><span id="rC3">—</span></div>
+
+      <div class="section-title">ИМПУЛЬСЫ</div>
+      <div class="kv"><span>Δv отхода</span><span id="rDvD">—</span></div>
+      <div class="kv"><span>Δv торможения</span><span id="rDvA">—</span></div>
+      <div class="kv"><span>ΣΔv</span><span id="rDvT">—</span></div>
+      <div class="kv"><span>Бюджет Δv</span><span id="rBud">—</span></div>
+
+      <div class="verdict idle" id="verdict">ВЫБЕРИТЕ ДАТУ</div>
+      <div class="why" id="why"></div>
+    </aside>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   1. КОНСТАНТЫ
+   ============================================================ */
+const MU_SUN   = 1.32712440018e11;
+const AU       = 149597870.7;
+const MU_EARTH = 398600.4418;
+const MU_MARS  = 42828.37;
+const R_EARTH  = 6378.137;
+const R_MARS   = 3396.19;
+const TWO_PI   = 2*Math.PI;
+const DAY      = 86400000;
+const DAY_SEC  = 86400;
+
+const HORIZONS_URL = 'https://ssd.jpl.nasa.gov/api/horizons.api';
+const CORS_PROXIES = [
+  'https://corsproxy.io/?',
+  'https://api.allorigins.win/raw?url=',
+];
+
+/* ============================================================
+   2. ЭФЕМЕРИДЫ: JPL HORIZONS + FALLBACK
+   ============================================================ */
+const ephemCache = new Map();
+let ephSource = 'none';
+
+function msToJD(ms){ return 2440587.5 + ms / DAY; }
+function jdToMs(jd){ return (jd - 2440587.5) * DAY; }
+
+function buildHorizonsURL(command, startJD, stopJD, stepDays){
+  const p = new URLSearchParams({
+    format:      'json',
+    COMMAND:     `'${command}'`,
+    OBJ_DATA:    "'NO'",
+    MAKE_EPHEM:  "'YES'",
+    EPHEM_TYPE:  "'VECTORS'",
+    CENTER:      "'500@10'",
+    REF_PLANE:   "'ECLIPTIC'",
+    REF_SYSTEM:  "'ICRF'",
+    START_TIME:  `'JD${startJD.toFixed(5)}'`,
+    STOP_TIME:   `'JD${stopJD.toFixed(5)}'`,
+    STEP_SIZE:   `'${stepDays}d'`,
+    VEC_TABLE:   "'2'",
+    OUT_UNITS:   "'KM-S'",
+    VEC_LABELS:  "'NO'",
+    CSV_FORMAT:  "'YES'",
+  });
+  return `${HORIZONS_URL}?${p.toString()}`;
+}
+
+function parseHorizonsJSON(json){
+  const raw = json.result || json;
+  const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+  const lines = text.split('\n');
+  const out = [];
+  let inside = false;
+  for (const line of lines){
+    if (line.includes('$$SOE')) { inside = true; continue; }
+    if (line.includes('$$EOE')) break;
+    if (!inside) continue;
+    const parts = line.includes(',')
+      ? line.split(',').map(s => s.trim())
+      : line.trim().split(/\s+/);
+    if (parts.length < 8) continue;
+    const jd = parseFloat(parts[0]);
+    if (!isFinite(jd)) continue;
+    out.push({
+      jd,
+      x:  parseFloat(parts[2]),
+      y:  parseFloat(parts[3]),
+      z:  parseFloat(parts[4]),
+      vx: parseFloat(parts[5]),
+      vy: parseFloat(parts[6]),
+      vz: parseFloat(parts[7]),
+    });
+  }
+  return out;
+}
+
+async function fetchHorizons(command, startJD, stopJD, stepDays){
+  const url = buildHorizonsURL(command, startJD, stopJD, stepDays);
+
+  // 1. Прямой запрос
+  try {
+    const r = await fetch(url, { mode:'cors' });
+    if (r.ok) {
+      const j = await r.json();
+      const parsed = parseHorizonsJSON(j);
+      if (parsed.length) return parsed;
+    }
+  } catch (_) { /* CORS */ }
+
+  // 2. Через прокси
+  for (const proxy of CORS_PROXIES){
+    try {
+      const r = await fetch(proxy + encodeURIComponent(url));
+      if (!r.ok) continue;
+      const text = await r.text();
+      let j;
+      try { j = JSON.parse(text); }
+      catch { j = { result: text }; }
+      const parsed = parseHorizonsJSON(j);
+      if (parsed.length) return parsed;
+    } catch (_) { /* next */ }
+  }
+  return null;
+}
+
+/* Встроенный fallback: круговые орбиты */
+function fallbackState(jd){
+  const t = (jd - 2451545.0) * DAY_SEC;
+  const T_E = 365.256363 * DAY_SEC;
+  const T_M = 686.980    * DAY_SEC;
+  const R_E = 1.00000011 * AU;
+  const R_M = 1.523679   * AU;
+  const L0_E = 100.46435 * Math.PI/180;
+  const L0_M = 355.45332 * Math.PI/180;
+  const nE = TWO_PI/T_E, nM = TWO_PI/T_M;
+
+  const thE = L0_E + nE*t;
+  const thM = L0_M + nM*t;
+
+  return {
+    earth: {
+      x: R_E*Math.cos(thE),  y: R_E*Math.sin(thE),  z: 0,
+      vx: -R_E*nE*Math.sin(thE), vy: R_E*nE*Math.cos(thE), vz: 0,
+    },
+    mars: {
+      x: R_M*Math.cos(thM),  y: R_M*Math.sin(thM),  z: 0,
+      vx: -R_M*nM*Math.sin(thM), vy: R_M*nM*Math.cos(thM), vz: 0,
+    },
+  };
+}
+
+/* Кэш эфемерид большими блоками — быстрее для перебора дней */
+const bulkCache = { earth: [], mars: [], loaded: false };
+
+async function loadBulkEphemeris(startYear, endYear){
+  const startJD = msToJD(Date.UTC(startYear,0,1));
+  const stopJD  = msToJD(Date.UTC(endYear+1,0,1));
+
+  setBadge('loading', 'JPL Horizons · загрузка…');
+
+  const [eRows, mRows] = await Promise.all([
+    fetchHorizons('399', startJD, stopJD, 2),
+    fetchHorizons('499', startJD, stopJD, 2),
+  ]);
+
+  if (eRows && eRows.length && mRows && mRows.length){
+    bulkCache.earth = eRows;
+    bulkCache.mars  = mRows;
+    bulkCache.loaded = true;
+    ephSource = 'horizons';
+    setBadge('ok', `JPL Horizons · ${eRows.length} точек`);
+    return true;
+  }
+
+  // Fallback — генерируем в памяти
+  bulkCache.earth = [];
+  bulkCache.mars  = [];
+  const jd0 = startJD;
+  const jd1 = stopJD;
+  for (let jd = jd0; jd <= jd1; jd += 2){
+    const st = fallbackState(jd);
+    bulkCache.earth.push({ jd, ...st.earth });
+    bulkCache.mars.push({ jd, ...st.mars });
+  }
+  bulkCache.loaded = true;
+  ephSource = 'fallback';
+  setBadge('fallback', 'Архив (круговые орбиты)');
+  return false;
+}
+
+function interp(arr, jd){
+  if (!arr.length) return null;
+  if (jd <= arr[0].jd) return arr[0];
+  if (jd >= arr[arr.length-1].jd) return arr[arr.length-1];
+  let lo = 0, hi = arr.length-1;
+  while (hi - lo > 1){
+    const mid = (lo + hi) >> 1;
+    if (arr[mid].jd <= jd) lo = mid; else hi = mid;
+  }
+  const a = arr[lo], b = arr[hi];
+  const t = (jd - a.jd) / (b.jd - a.jd);
+  const lerp = (k) => a[k] + (b[k] - a[k]) * t;
+  return {
+    x: lerp('x'), y: lerp('y'), z: lerp('z'),
+    vx: lerp('vx'), vy: lerp('vy'), vz: lerp('vz'),
+  };
+}
+
+function getState(jd){
+  if (!bulkCache.loaded) return null;
+  return {
+    earth: interp(bulkCache.earth, jd),
+    mars:  interp(bulkCache.mars, jd),
+  };
+}
+
+function setBadge(cls, text){
+  const b = document.getElementById('ephStatus');
+  b.className = 'badge ' + cls;
+  b.textContent = text;
+}
+
+/* ============================================================
+   3. ЗАДАЧА ЛАМБЕРТА
+   ============================================================ */
+function lambert(r1v, r2v, dt, mu, prograde=true){
+  const r1 = Math.hypot(r1v.x, r1v.y);
+  const r2 = Math.hypot(r2v.x, r2v.y);
+  let cosd = (r1v.x*r2v.x + r1v.y*r2v.y)/(r1*r2);
+  cosd = Math.max(-1, Math.min(1, cosd));
+  let dnu = Math.acos(cosd);
+  const cz = r1v.x*r2v.y - r1v.y*r2v.x;
+  if (prograde){ if (cz < 0) dnu = TWO_PI - dnu; }
+  else         { if (cz > 0) dnu = TWO_PI - dnu; }
+  if (Math.abs(dnu - Math.PI) < 1e-6) dnu += 1e-6;
+
+  const A = Math.sin(dnu)*Math.sqrt(r1*r2/(1 - Math.cos(dnu)));
+  if (!isFinite(A) || Math.abs(A) < 1e-12) return null;
+
+  let psi = 0, lo = -4*Math.PI*Math.PI, hi = 4*Math.PI*Math.PI;
+  let c2 = 0.5, c3 = 1/6, y = 0, chi = 0, dtc = 0;
+
+  for (let it = 0; it < 60; it++){
+    if (psi > 1e-6){
+      const sp = Math.sqrt(psi);
+      c2 = (1 - Math.cos(sp))/psi;
+      c3 = (sp - Math.sin(sp))/(psi*sp);
+    } else if (psi < -1e-6){
+      const sp = Math.sqrt(-psi);
+      c2 = (1 - Math.cosh(sp))/psi;
+      c3 = (Math.sinh(sp) - sp)/Math.pow(-psi, 1.5);
+    } else { c2 = 0.5; c3 = 1/6; }
+
+    y = r1 + r2 + A*(psi*c3 - 1)/Math.sqrt(c2);
+
+    if (A > 0 && y < 0){
+      let k = 0;
+      while (y < 0 && k < 400){
+        psi += 0.05; k++;
+        if (psi > 1e-6){
+          const sp = Math.sqrt(psi);
+          c2 = (1 - Math.cos(sp))/psi;
+          c3 = (sp - Math.sin(sp))/(psi*sp);
+        } else { c2 = 0.5; c3 = 1/6; }
+        y = r1 + r2 + A*(psi*c3 - 1)/Math.sqrt(c2);
+      }
+    }
+
+    chi = Math.sqrt(y/c2);
+    dtc = (chi*chi*chi*c3 + A*Math.sqrt(y))/Math.sqrt(mu);
+
+    if (dtc <= dt) lo = psi; else hi = psi;
+    const prev = psi;
+    psi = 0.5*(lo + hi);
+    if (Math.abs(dtc - dt) < 1e-7*dt || Math.abs(psi - prev) < 1e-13) break;
+  }
+
+  const f  = 1 - y/r1;
+  const g  = A*Math.sqrt(y/mu);
+  if (Math.abs(g) < 1e-12) return null;
+  const gd = 1 - y/r2;
+
+  return {
+    v1:{x:(r2v.x - f*r1v.x)/g,  y:(r2v.y - f*r1v.y)/g},
+    v2:{x:(gd*r2v.x - r1v.x)/g, y:(gd*r2v.y - r1v.y)/g},
+  };
+}
+
+/* ============================================================
+   4. ИМПУЛЬСЫ И ОЦЕНКА ДНЯ
+   ============================================================ */
+function dvFromParking(vInf, rPark, muPlanet){
+  const vp = Math.sqrt(muPlanet/rPark);
+  return Math.sqrt(vInf*vInf + 2*muPlanet/rPark) - vp;
+}
+
+function tryLambert(ms, tof, eDep, mDep, opt){
+  const arrMs = ms + tof*DAY;
+  const arrJD = msToJD(arrMs);
+  const stArr = getState(arrJD);
+  if (!stArr || !stArr.mars) return null;
+  const mArr = stArr.mars;
+
+  const sol = lambert(
+    {x:eDep.x, y:eDep.y},
+    {x:mArr.x, y:mArr.y},
+    tof*DAY_SEC, MU_SUN, true
+  );
+  if (!sol) return null;
+
+  const vInfD = Math.hypot(sol.v1.x - eDep.vx, sol.v1.y - eDep.vy);
+  const vInfA = Math.hypot(mArr.vx - sol.v2.x, mArr.vy - sol.v2.y);
+  const c3 = vInfD*vInfD;
+  const dvD = dvFromParking(vInfD, opt.rParkE, MU_EARTH);
+  const dvA = dvFromParking(vInfA, opt.rParkM, MU_MARS);
+  const dv  = dvD + dvA;
+
+  return {
+    tof, dv, dvD, dvA, c3, vInfD, vInfA,
+    depMs: ms, arrMs,
+    r1: {x:eDep.x, y:eDep.y},
+    v1: sol.v1,
+    r2: {x:mArr.x, y:mArr.y},
+    v2: sol.v2,
+    eDep, mDep, mArr,
+  };
+}
+
+function evaluateDay(ms, opt){
+  const jd = msToJD(ms);
+  const st = getState(jd);
+  if (!st || !st.earth || !st.mars) return null;
+  const eDep = st.earth;
+  const mDep = st.mars;
+
+  let best = null;
+  for (const tof of opt.tofList){
+    const res = tryLambert(ms, tof, eDep, mDep, opt);
+    if (res && (!best || res.dv < best.dv)) best = res;
+  }
+  if (!best) return null;
+
+  // Уточнение вокруг лучшего TOF (только в авто-режиме)
+  if (state.tofMode !== 'fixed'){
+    const lo = Math.max(100, best.tof - 18);
+    const hi = Math.min(450, best.tof + 18);
+    for (let tof = lo; tof <= hi; tof += 3){
+      if (tof === best.tof) continue;
+      const res = tryLambert(ms, tof, eDep, mDep, opt);
+      if (res && res.dv < best.dv) best = res;
+    }
+  }
+
+  best.score   = Math.max(0, Math.min(1,
+    (opt.dvBudget - best.dv)/(0.35*opt.dvBudget)));
+  best.success = (best.dv <= opt.dvBudget) && (best.tof <= opt.tofMax);
+  best.reasons = {
+    dv:  best.dv <= opt.dvBudget,
+    tof: best.tof <= opt.tofMax,
+  };
+  return best;
+}
+
+/* ============================================================
+   5. СОСТОЯНИЕ ПРИЛОЖЕНИЯ
+   ============================================================ */
+const state = {
+  startYear: 2026, endYear: 2035,
+  dvBudget: 6.0,
+  rParkE: R_EARTH + 200,
+  rParkM: R_MARS + 400,
+  tofMax: 350,
+  tofMode: 'auto',
+  tofFixed: 250,
+  results: new Map(),
+  dates: [],
+  selected: null,
+  computing: false,
+  animU: 0, animPlaying: false,
+};
+
+const $ = id => document.getElementById(id);
+
+function buildTofList(){
+  if (state.tofMode === 'fixed') return [state.tofFixed];
+  const list = [];
+  for (let t = 120; t <= 420; t += 20) list.push(t);
+  return list;
+}
+
+function buildOpts(){
+  return {
+    dvBudget: state.dvBudget,
+    rParkE: state.rParkE,
+    rParkM: state.rParkM,
+    tofMax: state.tofMax,
+    tofList: buildTofList(),
+  };
+}
+
+/* ============================================================
+   6. ЗАПУСК РАСЧЁТА
+   ============================================================ */
+async function startCompute(){
+  if (state.computing) return;
+  state.computing = true;
+  $('run').disabled = true;
+  $('best').disabled = true;
+  state.results.clear();
+
+  // Загрузка эфемерид
+  if (!bulkCache.loaded ||
+      bulkCache.earth[0].jd > msToJD(Date.UTC(state.startYear,0,1)) ||
+      bulkCache.earth[bulkCache.earth.length-1].jd < msToJD(Date.UTC(state.endYear+1,0,1)) - 2){
+    await loadBulkEphemeris(state.startYear, state.endYear);
+  }
+
+  // Генерация списка дат
+  state.dates = [];
+  for (let y = state.startYear; y <= state.endYear; y++){
+    const d0 = Date.UTC(y,0,1), d1 = Date.UTC(y+1,0,1);
+    for (let t = d0; t < d1; t += DAY) state.dates.push(t);
+  }
+
+  const opt = buildOpts();
+  let i = 0;
+  $('progTxt').textContent = 'Расчёт…';
+
+  function step(){
+    const t0 = performance.now();
+    while (i < state.dates.length && performance.now() - t0 < 25){
+      const ms = state.dates[i++];
+      const res = evaluateDay(ms, opt);
+      if (res) state.results.set(ms, res);
+    }
+    $('prog').style.width = (100*i/state.dates.length) + '%';
+
+    if (i < state.dates.length){
+      requestAnimationFrame(step);
+    } else {
+      state.computing = false;
+      $('run').disabled = false;
+      $('best').disabled = false;
+      $('progTxt').textContent = 'Готово: ' + state.results.size + ' дат';
+      setTimeout(()=>{ $('prog').style.width = '0%'; }, 900);
+      renderCalendar();
+      pickBestDate();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+/* ============================================================
+   7. ВЫБОР ДАТЫ
+   ============================================================ */
+function pickBestDate(){
+  if (!state.results.size) return;
+  let best = null, bestMs = null;
+  for (const [ms, r] of state.results){
+    if (!r.success) continue;
+    if (!best || r.dv < best.dv){ best = r; bestMs = ms; }
+  }
+  if (!bestMs){
+    for (const [ms, r] of state.results){
+      if (!best || r.dv < best.dv){ best = r; bestMs = ms; }
+    }
+  }
+  if (bestMs != null) selectDate(bestMs);
+}
+
+function selectDate(ms){
+  state.selected = ms;
+  state.animU = 0;
+  state.animPlaying = false;
+  $('play').textContent = '▶ ПУСК';
+  updateResultPanel();
+  renderCalendar();
+  invalidateArc();
+  drawSky();
+}
+
+/* ============================================================
+   8. ПАНЕЛЬ РЕЗУЛЬТАТА
+   ============================================================ */
+function fmtDate(ms){
+  const d = new Date(ms);
+  const M = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return String(d.getUTCDate()).padStart(2,'0') + ' ' +
+         M[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+}
+
+function updateResultPanel(){
+  const ms = state.selected;
+  if (ms == null){
+    $('verdict').textContent = 'ВЫБЕРИТЕ ДАТУ';
+    $('verdict').className = 'verdict idle';
+    return;
+  }
+  const r = state.results.get(ms);
+  $('rDep').textContent = fmtDate(ms);
+
+  if (!r){
+    $('rArr').textContent = '—';
+    $('rTof').textContent = '—';
+    $('rPhase').textContent = '—';
+    $('rVinfD').textContent = '—';
+    $('rVinfA').textContent = '—';
+    $('rC3').textContent = '—';
+    $('rDvD').textContent = '—';
+    $('rDvA').textContent = '—';
+    $('rDvT').textContent = '—';
+    $('rBud').textContent = state.dvBudget.toFixed(2) + ' км/с';
+    $('verdict').textContent = 'НЕТ РЕШЕНИЯ';
+    $('verdict').className = 'verdict bad';
+    $('why').textContent = 'Для этой даты решатель Ламберта не нашёл допустимого перелёта.';
+    return;
+  }
+
+  const phaseActual = ((Math.atan2(r.mDep.y, r.mDep.x) -
+                        Math.atan2(r.eDep.y, r.eDep.x)) % TWO_PI + TWO_PI) % TWO_PI * 180/Math.PI;
+
+  $('rArr').textContent   = fmtDate(r.arrMs);
+  $('rTof').textContent   = r.tof.toFixed(0) + ' сут';
+  $('rPhase').textContent = phaseActual.toFixed(1) + '°';
+  $('rVinfD').textContent = r.vInfD.toFixed(3) + ' км/с';
+  $('rVinfA').textContent = r.vInfA.toFixed(3) + ' км/с';
+  $('rC3').textContent    = r.c3.toFixed(2) + ' км²/с²';
+  $('rDvD').textContent   = r.dvD.toFixed(3) + ' км/с';
+  $('rDvA').textContent   = r.dvA.toFixed(3) + ' км/с';
+  $('rDvT').textContent   = r.dv.toFixed(3) + ' км/с';
+  $('rBud').textContent   = state.dvBudget.toFixed(2) + ' км/с';
+
+  const v = $('verdict');
+  if (r.success){
+    v.textContent = '✔ ЗАПУСК ВОЗМОЖЕН';
+    v.className = 'verdict ok';
+  } else {
+    v.textContent = '✖ ЗАПУСК НЕВОЗМОЖЕН';
+    v.className = 'verdict bad';
+  }
+
+  const parts = [];
+  parts.push('<b>ΣΔv = ' + r.dv.toFixed(3) + ' км/с</b> при бюджете ' +
+             state.dvBudget.toFixed(2) + ' км/с → ' +
+             (r.reasons.dv ? '<span style="color:var(--ok)">в пределах</span>'
+                           : '<span style="color:var(--bad)">превышение на ' +
+                             (r.dv - state.dvBudget).toFixed(3) + ' км/с</span>'));
+  parts.push('Время полёта <b>' + r.tof + ' сут</b> при лимите ' +
+             state.tofMax + ' сут → ' +
+             (r.reasons.tof ? '<span style="color:var(--ok)">ок</span>'
+                            : '<span style="color:var(--bad)">дольше лимита</span>'));
+  parts.push('Источник эфемерид: <b>' +
+             (ephSource === 'horizons' ? 'JPL Horizons (live)' : 'встроенный архив') +
+             '</b>.');
+  $('why').innerHTML = parts.join('<br><br>');
+}
+
+/* ============================================================
+   9. КАЛЕНДАРЬ
+   ============================================================ */
+const calCanvas = $('cal');
+let calInfo = null;
+
+function layoutCalendar(){
+  const dpr = window.devicePixelRatio || 1;
+  const wrap = $('calWrap');
+  const W = wrap.clientWidth || 800;
+  const years = state.endYear - state.startYear + 1;
+  const rowH = 20, gap = 4;
+  const H = years*(rowH+gap) + 26;
+  calCanvas.width = Math.round(W*dpr);
+  calCanvas.height = Math.round(H*dpr);
+  calCanvas.style.height = H + 'px';
+  const ctx = calCanvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  calInfo = { W, H, ctx, years, rowH, gap, padL: 52, padR: 10, padT: 22 };
+}
+
+function renderCalendar(){
+  if (!calInfo || calInfo.years !== state.endYear - state.startYear + 1){
+    layoutCalendar();
+  }
+  const {W,H,ctx,years,rowH,gap,padL,padR,padT} = calInfo;
+  ctx.clearRect(0,0,W,H);
+
+  const plotW = W - padL - padR;
+  const dayW = plotW/366;
+
+  const months = ['Я','Ф','М','А','М','И','И','А','С','О','Н','Д'];
+  const cum = [0,31,59,90,120,151,181,212,243,273,304,334];
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#5b6a7a';
+  for (let m = 0; m < 12; m++){
+    ctx.fillText(months[m], padL + (cum[m]+15)*dayW, 10);
+  }
+
+  const selDate = state.selected != null ? new Date(state.selected) : null;
+
+  for (let yi = 0; yi < years; yi++){
+    const y = state.startYear + yi;
+    const yy = padT + yi*(rowH+gap);
+
+    ctx.fillStyle = '#8b98a8';
+    ctx.textAlign = 'right';
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillText(y, padL-8, yy + rowH/2);
+
+    const d0 = Date.UTC(y,0,1);
+    for (let d = 0; d < 366; d++){
+      const ms = d0 + d*DAY;
+      const dt = new Date(ms);
+      if (dt.getUTCFullYear() !== y) continue;
+
+      const r = state.results.get(ms);
+      let col = '#161f29';
+      if (r){
+        if (r.success){
+          col = 'rgba(60,220,130,' + (0.30 + 0.68*r.score).toFixed(3) + ')';
+        } else {
+          const sev = Math.max(0, Math.min(1, (r.dv - state.dvBudget)/2.5));
+          col = 'rgba(220,70,70,' + (0.25 + 0.5*sev).toFixed(3) + ')';
+        }
+      }
+      ctx.fillStyle = col;
+      ctx.fillRect(padL + d*dayW, yy, Math.max(1, dayW - 0.6), rowH);
+
+      if (selDate && dt.getUTCFullYear() === selDate.getUTCFullYear() &&
+          dt.getUTCMonth() === selDate.getUTCMonth() &&
+          dt.getUTCDate() === selDate.getUTCDate()){
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(padL + d*dayW - 1, yy - 1, Math.max(2, dayW + 1), rowH + 2);
+      }
+    }
+  }
+}
+
+calCanvas.addEventListener('click', e => {
+  if (!calInfo) return;
+  const rect = calCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const {rowH, gap, padL, padR, W, years} = calInfo;
+  const yi = Math.floor((y - calInfo.padT)/(rowH+gap));
+  if (yi < 0 || yi >= years) return;
+  const year = state.startYear + yi;
+  const dayW = (W - padL - padR)/366;
+  const d = Math.floor((x - padL)/dayW);
+  if (d < 0 || d > 365) return;
+  const ms = Date.UTC(year,0,1) + d*DAY;
+  if (new Date(ms).getUTCFullYear() !== year) return;
+  if (!state.results.has(ms)) return;
+  selectDate(ms);
+});
+
+calCanvas.addEventListener('mousemove', e => {
+  if (!calInfo) return;
+  const tip = $('tip');
+  const rect = calCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const {rowH, gap, padL, padR, W, years} = calInfo;
+  const yi = Math.floor((y - calInfo.padT)/(rowH+gap));
+  if (yi < 0 || yi >= years){ tip.style.display='none'; return; }
+  const year = state.startYear + yi;
+  const dayW = (W - padL - padR)/366;
+  const d = Math.floor((x - padL)/dayW);
+  if (d < 0 || d > 365){ tip.style.display='none'; return; }
+  const ms = Date.UTC(year,0,1) + d*DAY;
+  if (new Date(ms).getUTCFullYear() !== year){ tip.style.display='none'; return; }
+  const r = state.results.get(ms);
+  if (!r){ tip.style.display='none'; return; }
+  tip.innerHTML = fmtDate(ms) + '<br>ΣΔv: <b>' + r.dv.toFixed(2) +
+                  ' км/с</b><br>TOF: <b>' + r.tof + ' сут</b><br>' +
+                  (r.success ? '<span style="color:#3cdc82">окно открыто</span>'
+                             : '<span style="color:#e05555">запуск невыгоден</span>');
+  tip.style.display = 'block';
+  tip.style.left = Math.min(x + 14, rect.width - 190) + 'px';
+  tip.style.top  = (y + 18) + 'px';
+});
+calCanvas.addEventListener('mouseleave', ()=>{ $('tip').style.display='none'; });
+
+/* ============================================================
+   10. СЦЕНА
+   ============================================================ */
+const sky = $('sky');
+let skyCtx = null, skyW = 0, skyH = 0;
+let arcCache = { key:null, pts:[] };
+
+function layoutSky(){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = sky.getBoundingClientRect();
+  skyW = rect.width; skyH = rect.height;
+  sky.width = Math.round(skyW*dpr);
+  sky.height = Math.round(skyH*dpr);
+  skyCtx = sky.getContext('2d');
+  skyCtx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function invalidateArc(){ arcCache.key = null; }
+
+function propagate(r0, v0, dt, mu){
+  const r = Math.hypot(r0.x, r0.y);
+  const v2 = v0.x*v0.x + v0.y*v0.y;
+  const hz = r0.x*v0.y - r0.y*v0.x;
+  const energy = v2/2 - mu/r;
+  const a = -mu/(2*energy);
+  const e = Math.sqrt(Math.max(0, 1 + 2*energy*hz*hz/(mu*mu)));
+  const ex = ((v2 - mu/r)*r0.x - (r0.x*v0.x + r0.y*v0.y)*v0.x)/mu;
+  const ey = ((v2 - mu/r)*r0.y - (r0.x*v0.x + r0.y*v0.y)*v0.y)/mu;
+  const omega = Math.atan2(ey, ex);
+  const nu0 = Math.atan2(r0.y, r0.x) - omega;
+  const E0 = 2*Math.atan2(Math.sqrt(1-e)*Math.sin(nu0/2), Math.sqrt(1+e)*Math.cos(nu0/2));
+  const M0 = E0 - e*Math.sin(E0);
+  const n = Math.sqrt(mu/(a*a*a));
+  const M = M0 + n*dt;
+  let E = M;
+  for (let i = 0; i < 30; i++){
+    const f = E - e*Math.sin(E) - M;
+    const fp = 1 - e*Math.cos(E);
+    const dE = f/fp;
+    E -= dE;
+    if (Math.abs(dE) < 1e-12) break;
+  }
+  const nu = 2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2), Math.sqrt(1-e)*Math.cos(E/2));
+  const rr = a*(1 - e*Math.cos(E));
+  return { x: rr*Math.cos(nu+omega), y: rr*Math.sin(nu+omega) };
+}
+
+function buildArc(){
+  const ms = state.selected;
+  if (ms == null) return [];
+  const r = state.results.get(ms);
+  if (!r) return [];
+  if (arcCache.key === ms) return arcCache.pts;
+
+  const pts = [];
+  const N = 180;
+  for (let i = 0; i <= N; i++){
+    const dt = (i/N) * r.tof * DAY_SEC;
+    pts.push(propagate(r.r1, r.v1, dt, MU_SUN));
+  }
+  arcCache = { key: ms, pts };
+  return pts;
+}
+
+function drawSky(){
+  if (!skyCtx) layoutSky();
+  const ctx = skyCtx, W = skyW, H = skyH;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#060a0f';
+  ctx.fillRect(0,0,W,H);
+
+  const cx = W/2, cy = H/2;
+  const margin = 34;
+  const scale = (Math.min(W,H)/2 - margin) / (1.8 * AU);
+  const toPx = p => ({ x: cx + p.x*scale, y: cy - p.y*scale });
+
+  // Орбиты
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(90,150,200,0.30)';
+  ctx.beginPath(); ctx.arc(cx, cy, 1.0*AU*scale, 0, TWO_PI); ctx.stroke();
+  ctx.strokeStyle = 'rgba(220,120,90,0.30)';
+  ctx.beginPath(); ctx.arc(cx, cy, 1.524*AU*scale, 0, TWO_PI); ctx.stroke();
+
+  // Солнце
+  const sunG = ctx.createRadialGradient(cx, cy, 0, cx, cy, 26);
+  sunG.addColorStop(0, 'rgba(255,230,140,1)');
+  sunG.addColorStop(0.4, 'rgba(255,190,70,0.85)');
+  sunG.addColorStop(1, 'rgba(255,150,40,0)');
+  ctx.fillStyle = sunG;
+  ctx.beginPath(); ctx.arc(cx, cy, 26, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = '#ffe9a8';
+  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TWO_PI); ctx.fill();
+
+  const ms = state.selected;
+  if (ms == null){
+    ctx.fillStyle = '#8b98a8';
+    ctx.font = '13px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Выберите дату в календаре', cx, H - 20);
+    return;
+  }
+
+  const r = state.results.get(ms);
+  if (!r) return;
+
+  const eP = toPx(r.eDep);
+  const mP = toPx(r.mDep);
+  const mArrP = toPx(r.mArr);
+
+  // Траектория
+  const pts = buildArc();
+  if (pts.length > 1){
+    ctx.strokeStyle = 'rgba(255,210,80,0.95)';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6,5]);
+    ctx.beginPath();
+    const p0 = toPx(pts[0]);
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < pts.length; i++){
+      const p = toPx(pts[i]);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Марс прилёт
+  ctx.fillStyle = 'rgba(230,120,90,0.30)';
+  ctx.beginPath(); ctx.arc(mArrP.x, mArrP.y, 7, 0, TWO_PI); ctx.fill();
+  ctx.strokeStyle = 'rgba(230,120,90,0.85)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(mArrP.x, mArrP.y, 7, 0, TWO_PI); ctx.stroke();
+
+  // Земля
+  ctx.fillStyle = '#4fa8ff';
+  ctx.beginPath(); ctx.arc(eP.x, eP.y, 7, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = 'rgba(120,190,255,0.9)';
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('Земля', eP.x + 11, eP.y + 4);
+
+  // Марс старт
+  ctx.fillStyle = '#e05555';
+  ctx.beginPath(); ctx.arc(mP.x, mP.y, 6, 0, TWO_PI); ctx.fill();
+  ctx.fillStyle = 'rgba(240,140,120,0.9)';
+  ctx.fillText('Марс', mP.x + 10, mP.y + 4);
+
+  // Аппарат
+  if (pts.length > 1){
+    const idx = Math.min(pts.length-1, Math.floor(state.animU*(pts.length-1)));
+    const sp = toPx(pts[idx]);
+    const g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 12);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.4, 'rgba(255,220,90,0.9)');
+    g.addColorStop(1, 'rgba(255,200,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, 12, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = '#fffbe6';
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, 3, 0, TWO_PI); ctx.fill();
+
+    // Прогресс перелёта в правом нижнем углу
+    const pct = Math.round(state.animU * 100);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(W - 130, H - 30, 120, 20);
+    ctx.strokeStyle = 'rgba(80,110,140,0.6)';
+    ctx.strokeRect(W - 129.5, H - 29.5, 119, 19);
+    ctx.fillStyle = '#ffd24a';
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Перелёт: ' + pct + '%', W - 70, H - 16);
+  }
+}
+
+/* --- цикл анимации --- */
+let lastTs = 0;
+function loop(ts){
+  const dt = lastTs ? (ts - lastTs)/1000 : 0;
+  lastTs = ts;
+
+  if (state.animPlaying){
+    state.animU += dt/4.2;
+    if (state.animU >= 1){
+      state.animU = 1;
+      state.animPlaying = false;
+      $('play').textContent = '▶ ПУСК';
+    }
+  }
+  drawSky();
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   11. ОБРАБОТЧИКИ
+   ============================================================ */
+function readControls(){
+  const y0 = parseInt($('y0').value, 10);
+  const y1 = parseInt($('y1').value, 10);
+  state.startYear = Math.max(1990, Math.min(2060, isNaN(y0) ? 2026 : y0));
+  state.endYear   = Math.max(state.startYear,
+                             Math.min(2060, isNaN(y1) ? state.startYear+9 : y1));
+  state.dvBudget = parseFloat($('dvB').value);
+  state.rParkE   = R_EARTH + parseFloat($('hE').value);
+  state.rParkM   = R_MARS  + parseFloat($('hM').value);
+  state.tofMax   = parseFloat($('tofMax').value);
+  state.tofMode  = $('tofMode').value;
+  state.tofFixed = parseFloat($('tofFix').value);
+}
+
+function syncLabels(){
+  $('dvBVal').textContent = state.dvBudget.toFixed(1);
+  $('hEVal').textContent  = Math.round(state.rParkE - R_EARTH);
+  $('hMVal').textContent  = Math.round(state.rParkM - R_MARS);
+  $('tofMaxVal').textContent = state.tofMax;
+  $('tofFixVal').textContent = state.tofFixed;
+}
+
+['dvB','hE','hM','tofMax','tofFix'].forEach(id=>{
+  $(id).addEventListener('input', ()=>{ readControls(); syncLabels(); });
+});
+
+$('tofMode').addEventListener('change', ()=>{
+  const fixed = $('tofMode').value === 'fixed';
+  $('tofFix').style.display = fixed ? 'block' : 'none';
+  $('tofFixLabel').style.display = fixed ? 'block' : 'none';
+  readControls();
+});
+
+$('run').addEventListener('click', ()=>{
+  readControls();
+  syncLabels();
+  startCompute();
+});
+
+$('best').addEventListener('click', ()=>{
+  if (!state.results.size) return;
+  pickBestDate();
+});
+
+$('reset').addEventListener('click', ()=>{
+  $('y0').value = 2026; $('y1').value = 2035;
+  $('dvB').value = 6.0; $('hE').value = 200; $('hM').value = 400;
+  $('tofMax').value = 350; $('tofFix').value = 250;
+  $('tofMode').value = 'auto';
+  $('tofFix').style.display = 'none';
+  $('tofFixLabel').style.display = 'none';
+  readControls();
+  syncLabels();
+  state.selected = null;
+  startCompute();
+});
+
+$('play').addEventListener('click', ()=>{
+  if (state.selected == null) return;
+  if (state.animPlaying){
+    state.animPlaying = false;
+    $('play').textContent = '▶ ПУСК';
+  } else {
+    if (state.animU >= 1) state.animU = 0;
+    state.animPlaying = true;
+    $('play').textContent = '❚❚ ПАУЗА';
+  }
+});
+
+$('skip').addEventListener('click', ()=>{
+  if (state.selected == null) return;
+  state.animU = 1;
+  state.animPlaying = false;
+  $('play').textContent = '▶ ПУСК';
+  drawSky();
+});
+
+window.addEventListener('resize', ()=>{
+  layoutSky();
+  layoutCalendar();
+  renderCalendar();
+  drawSky();
+});
+
+/* ============================================================
+   12. СТАРТ
+   ============================================================ */
+readControls();
+syncLabels();
+layoutSky();
+layoutCalendar();
+renderCalendar();
+requestAnimationFrame(loop);
+startCompute();
+</script>
+</body>
+</html>
